@@ -1,0 +1,6 @@
+{
+  "name": "لاڤير للعناية",
+  "description": "متجر لاڤير للعناية الشخصية والجمال - منتجات طبيعية أصلية وعناية متكاملة",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
