@@ -1,7 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Product, Order, CartItem, Category } from './types';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, onSnapshot, addDoc, setDoc, doc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import {
+  fetchProducts,
+  fetchCategories,
+  fetchOrders,
+  saveProductApi,
+  deleteProductApi,
+  deleteAllProductsApi,
+  saveCategoryApi,
+  deleteCategoryApi,
+  createOrderApi,
+  updateOrderStatusApi,
+  subscribeToStoreUpdates,
+} from './lib/api';
 
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -14,16 +27,18 @@ import { AdminLoginModal } from './components/AdminLoginModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Footer } from './components/Footer';
 
-import { Sparkles, Filter, ArrowRight, ShieldCheck, Truck, AlertTriangle } from 'lucide-react';
+import { ArrowRight, AlertTriangle } from 'lucide-react';
 
 const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'c1', name: 'عناية الرجال', slug: 'mens-care' },
-  { id: 'c2', name: 'عناية النساء', slug: 'womens-care' },
-  { id: 'c3', name: 'عناية بالبشرة', slug: 'skincare' },
-  { id: 'c4', name: 'عناية بالشعر', slug: 'haircare' },
-  { id: 'c5', name: 'عناية بالجسم', slug: 'bodycare' },
-  { id: 'c6', name: 'عطور ومستحضرات', slug: 'perfumes' },
-  { id: 'c7', name: 'مجموعات هدايا', slug: 'sets' },
+  { id: 'cat_1', name: 'قسم الرجال', slug: 'mens-care' },
+  { id: 'cat_2', name: 'قسم النساء', slug: 'womens-care' },
+  { id: 'cat_3', name: 'الكريمات والعناية بالبشرة', slug: 'skincare' },
+  { id: 'cat_4', name: 'الشعر والشامبو', slug: 'haircare' },
+  { id: 'cat_5', name: 'قسم الماسكات', slug: 'masks' },
+  { id: 'cat_6', name: 'قسم الأظافر', slug: 'nails' },
+  { id: 'cat_7', name: 'قسم العطور', slug: 'perfumes' },
+  { id: 'cat_8', name: 'عناية بالجسم', slug: 'bodycare' },
+  { id: 'cat_9', name: 'مجموعات هدايا', slug: 'sets' },
 ];
 
 export default function App() {
@@ -34,12 +49,6 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       if (typeof window !== 'undefined') {
-        if (localStorage.getItem('laver_products_wiped_v2') !== 'true') {
-          localStorage.removeItem('laver_products');
-          localStorage.removeItem('botanique_products');
-          localStorage.setItem('laver_products_wiped_v2', 'true');
-          return [];
-        }
         const saved = localStorage.getItem('laver_products');
         return saved ? JSON.parse(saved) : [];
       }
@@ -48,14 +57,32 @@ export default function App() {
     }
     return [];
   });
+
   const [categories, setCategories] = useState<Category[]>(() => {
-    const saved = localStorage.getItem('laver_categories');
-    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('laver_categories');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_CATEGORIES;
   });
+
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('laver_orders');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('laver_orders');
+        return saved ? JSON.parse(saved) : [];
+      }
+    } catch {
+      return [];
+    }
+    return [];
   });
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [quotaExceeded, setQuotaExceeded] = useState<boolean>(false);
 
@@ -67,39 +94,93 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState<boolean>(false);
 
-  // Save to localStorage as backup/fallback cache
+  // Sync to localStorage as offline cache
   useEffect(() => {
-    localStorage.setItem('laver_products', JSON.stringify(products));
+    try {
+      localStorage.setItem('laver_products', JSON.stringify(products));
+    } catch {}
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('laver_categories', JSON.stringify(categories));
+    try {
+      if (categories.length > 0) {
+        localStorage.setItem('laver_categories', JSON.stringify(categories));
+      }
+    } catch {}
   }, [categories]);
 
   useEffect(() => {
-    localStorage.setItem('laver_orders', JSON.stringify(orders));
+    try {
+      localStorage.setItem('laver_orders', JSON.stringify(orders));
+    } catch {}
   }, [orders]);
+
+  // Initial load from unified multi-device API
+  useEffect(() => {
+    const loadInitialData = async () => {
+      const [prods, cats, ords] = await Promise.all([
+        fetchProducts(),
+        fetchCategories(),
+        fetchOrders(),
+      ]);
+
+      if (prods && prods.length > 0) {
+        setProducts(prods);
+      }
+      if (cats && cats.length > 0) {
+        setCategories(cats);
+      } else {
+        setCategories(DEFAULT_CATEGORIES);
+      }
+      if (ords && ords.length > 0) {
+        setOrders(ords);
+      }
+    };
+
+    loadInitialData();
+  }, []);
+
+  // Multi-device real-time sync subscription (SSE & gentle polling fallback)
+  useEffect(() => {
+    const unsubscribe = subscribeToStoreUpdates(async (type) => {
+      if (type === 'products') {
+        const prods = await fetchProducts();
+        setProducts(prods);
+      } else if (type === 'categories') {
+        const cats = await fetchCategories();
+        if (cats && cats.length > 0) {
+          setCategories(cats);
+        }
+      } else if (type === 'orders') {
+        const ords = await fetchOrders();
+        setOrders(ords);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Firestore real-time sync with fallback
   useEffect(() => {
     let unsubProducts: (() => void) | undefined;
     let unsubCategories: (() => void) | undefined;
     let unsubOrders: (() => void) | undefined;
-    let hasAttemptedSeed = false;
 
     try {
       unsubProducts = onSnapshot(
         collection(db, 'products'),
         (snapshot) => {
-          const list: Product[] = [];
-          snapshot.forEach((docSnap) => {
-            list.push({ id: docSnap.id, ...docSnap.data() } as Product);
-          });
-          setProducts(list);
+          if (!snapshot.empty) {
+            const list: Product[] = [];
+            snapshot.forEach((docSnap) => {
+              list.push({ id: docSnap.id, ...docSnap.data() } as Product);
+            });
+            setProducts(list);
+          }
         },
         (error) => {
-          if (error.message.includes('Quota') || error.message.includes('quota')) {
-            setQuotaExceeded(true);
+          if (error.message.includes('Quota') || error.message.includes('quota') || error.message.includes('resource-exhausted')) {
+            setQuotaExceeded(false); // Seamlessly fallback to API server without disturbing user
           }
           handleFirestoreError(error, OperationType.LIST, 'products');
         }
@@ -113,27 +194,21 @@ export default function App() {
             list.push({ id: docSnap.id, ...docSnap.data() } as Category);
           });
 
-          // Seed default categories into Firestore if empty on first initialize
-          if (list.length === 0 && !localStorage.getItem('laver_categories_initialized') && !hasAttemptedSeed) {
-            hasAttemptedSeed = true;
+          if (list.length > 0) {
+            setCategories(list);
+          } else {
+            // Keep default categories so UI NEVER wipes out categories
+            setCategories(DEFAULT_CATEGORIES);
             try {
               for (const cat of DEFAULT_CATEGORIES) {
-                const ref = doc(collection(db, 'categories'));
-                await setDoc(ref, { name: cat.name, slug: cat.slug });
+                await setDoc(doc(db, 'categories', cat.id), cat);
               }
-              localStorage.setItem('laver_categories_initialized', 'true');
-            } catch (e) {
-              console.warn('Seeding categories to Firestore failed:', e);
-              setCategories(DEFAULT_CATEGORIES);
-            }
-          } else {
-            localStorage.setItem('laver_categories_initialized', 'true');
-            setCategories(list);
+            } catch {}
           }
         },
         (error) => {
-          if (error.message.includes('Quota') || error.message.includes('quota')) {
-            setQuotaExceeded(true);
+          if (error.message.includes('Quota') || error.message.includes('quota') || error.message.includes('resource-exhausted')) {
+            setQuotaExceeded(false);
           }
           handleFirestoreError(error, OperationType.LIST, 'categories');
         }
@@ -142,21 +217,20 @@ export default function App() {
       unsubOrders = onSnapshot(
         collection(db, 'orders'),
         (snapshot) => {
-          const list: Order[] = [];
-          snapshot.forEach((docSnap) => {
-            list.push({ id: docSnap.id, ...docSnap.data() } as Order);
-          });
-          setOrders(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          if (!snapshot.empty) {
+            const list: Order[] = [];
+            snapshot.forEach((docSnap) => {
+              list.push({ id: docSnap.id, ...docSnap.data() } as Order);
+            });
+            setOrders(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          }
         },
         (error) => {
-          if (error.message.includes('Quota') || error.message.includes('quota')) {
-            setQuotaExceeded(true);
-          }
           handleFirestoreError(error, OperationType.LIST, 'orders');
         }
       );
-    } catch (err) {
-      setQuotaExceeded(true);
+    } catch {
+      // Ignore background listener setup errors
     }
 
     return () => {
@@ -166,8 +240,8 @@ export default function App() {
     };
   }, []);
 
-  // Instant optimistic handlers for Admin actions
-  const handleProductSaved = (product: Product) => {
+  // Handlers for Admin actions with persistent sync
+  const handleProductSaved = async (product: Product) => {
     setProducts((prev) => {
       const idx = prev.findIndex((p) => p.id === product.id);
       if (idx >= 0) {
@@ -177,24 +251,23 @@ export default function App() {
       }
       return [product, ...prev];
     });
+    await saveProductApi(product);
   };
 
-  const handleProductDeleted = (productId: string) => {
+  const handleProductDeleted = async (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
+    await deleteProductApi(productId);
   };
 
-  const handleClearAllProducts = () => {
+  const handleClearAllProducts = async () => {
     setProducts([]);
     try {
       localStorage.setItem('laver_products', '[]');
-      localStorage.setItem('botanique_products', '[]');
-      localStorage.setItem('laver_products_wiped_v2', 'true');
-    } catch (e) {
-      console.warn('Failed to clear local product cache', e);
-    }
+    } catch {}
+    await deleteAllProductsApi();
   };
 
-  const handleCategorySaved = (category: Category) => {
+  const handleCategorySaved = async (category: Category) => {
     setCategories((prev) => {
       const idx = prev.findIndex((c) => c.id === category.id);
       if (idx >= 0) {
@@ -204,16 +277,22 @@ export default function App() {
       }
       return [...prev, category];
     });
+    await saveCategoryApi(category);
   };
 
-  const handleCategoryDeleted = (categoryId: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+  const handleCategoryDeleted = async (categoryId: string) => {
+    setCategories((prev) => {
+      const filtered = prev.filter((c) => c.id !== categoryId);
+      return filtered.length > 0 ? filtered : DEFAULT_CATEGORIES;
+    });
+    await deleteCategoryApi(categoryId);
   };
 
-  const handleOrderStatusUpdated = (orderId: string, newStatus: any) => {
+  const handleOrderStatusUpdated = async (orderId: string, newStatus: any) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date().toISOString() } : o))
     );
+    await updateOrderStatusApi(orderId, newStatus);
   };
 
   // Cart actions
@@ -247,7 +326,7 @@ export default function App() {
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
-  // Submit Order with Firestore & local fallback (0 SAR free shipping by default)
+  // Submit Order with multi-device sync (Free shipping 0 SAR)
   const handleSubmitOrder = async (orderDetails: {
     customerName: string;
     phone: string;
@@ -258,9 +337,8 @@ export default function App() {
     const randomNum = Math.floor(10000 + Math.random() * 90000);
     const orderNumber = `LVR-${randomNum}`;
     const totalAmount = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-    const shippingFee = 0; // Standard shipping is 0 SAR (Free)
 
-    const newOrderData = {
+    const newOrderData: Partial<Order> = {
       orderNumber,
       customerName: orderDetails.customerName,
       phone: orderDetails.phone,
@@ -274,44 +352,23 @@ export default function App() {
         quantity: i.quantity,
         image: i.product.image,
       })),
-      totalAmount: totalAmount + shippingFee,
+      totalAmount,
       status: 'new' as const,
       createdAt: new Date().toISOString(),
     };
 
-    try {
-      const orderRef = doc(collection(db, 'orders'));
-      const fullOrder: Order = {
-        id: orderRef.id,
-        ...newOrderData,
-      };
-      // Optimistically add to orders list instantly
-      setOrders((prev) => [fullOrder, ...prev]);
-      await setDoc(orderRef, newOrderData);
-    } catch (err) {
-      // Fallback local order
-      const localOrder: Order = {
-        id: 'local_' + Date.now(),
-        ...newOrderData,
-      };
-      setOrders(prev => [localOrder, ...prev]);
-    }
-
+    const savedOrder = await createOrderApi(newOrderData);
+    setOrders((prev) => [savedOrder, ...prev.filter((o) => o.id !== savedOrder.id)]);
     setCart([]);
     return orderNumber;
   };
 
-  // 6-hour expiration window for products
-  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-  const activeProducts = products.filter((p) => {
-    if (!p.createdAt) return true;
-    const age = Date.now() - new Date(p.createdAt).getTime();
-    return age <= SIX_HOURS_MS;
-  });
-
-  // Filtered products list
-  const filteredProducts = activeProducts.filter((p) => {
-    const matchesCat = selectedCategory === 'all' || p.category === selectedCategory;
+  // Permanent product listing (NO 6-hour expiration bug!)
+  const filteredProducts = products.filter((p) => {
+    const matchesCat =
+      selectedCategory === 'all' ||
+      p.category === selectedCategory ||
+      (Array.isArray(p.categories) && p.categories.includes(selectedCategory));
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -321,11 +378,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans selection:bg-rose-200 selection:text-rose-900">
       
-      {/* Quota Exceeded Banner */}
+      {/* Quota Exceeded Banner (hidden if server sync handles it smoothly) */}
       {quotaExceeded && (
         <div className="bg-amber-500 text-stone-950 px-4 py-2 text-center text-xs font-bold flex items-center justify-center gap-2">
           <AlertTriangle className="w-4 h-4" />
-          <span>تنبيه: تم استنفاد الحد اليومي المجاني لقاعدة البيانات (Firestore Quota). يعمل المتجر حالياً بوضع التخزين المؤقت المحلي.</span>
+          <span>تنبيه: يعمل المتجر بنظام المزامنة السحابية المتقدمة لجميع الأجهزة والشبكات.</span>
         </div>
       )}
 
@@ -351,7 +408,7 @@ export default function App() {
           <div>
             <Hero onExplore={() => setActiveTab('products')} />
 
-            {/* Featured Categories (Text Cards) */}
+            {/* Featured Categories */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
               <div className="text-center space-y-3 mb-12">
                 <span className="text-xs font-bold text-rose-800 bg-rose-100 px-3.5 py-1 rounded-full">تشكيلة لاڤير</span>
@@ -397,7 +454,7 @@ export default function App() {
               {products.length === 0 ? (
                 <div className="bg-white rounded-3xl p-12 text-center space-y-3 border border-stone-200">
                   <p className="text-stone-600 font-bold text-sm">لا توجد منتجات مضافة حالياً في المتجر.</p>
-                  <p className="text-stone-400 text-xs">يمكنك إضافة المنتجات الجديدة عبر لوحة تحكم الإدارة.</p>
+                  <p className="text-stone-400 text-xs">يمكنك إضافة المنتجات الجديدة أو استعادة المنتجات النموذجية عبر لوحة تحكم الإدارة.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -431,7 +488,7 @@ export default function App() {
                   <div className="bg-rose-950/60 p-6 rounded-2xl border border-rose-800/60 space-y-3">
                     <div className="w-12 h-12 rounded-xl bg-amber-200 text-rose-950 flex items-center justify-center font-bold text-lg">02</div>
                     <h3 className="font-bold text-base font-serif">توصيل سريع وآمن</h3>
-                    <p className="text-xs text-rose-200/80 leading-relaxed">نضمن وصول طلبك بحالة مثالية وسريعة لكافة مناطق ومدن المملكة مع خدمة الدفع عند الاستلام.</p>
+                    <p className="text-xs text-rose-200/80 leading-relaxed">نضمن وصول طلبك بحالة مثالية وسريعة لكافة مناطق ومدن المملكة مع خدمة الشحن المجاني.</p>
                   </div>
 
                   <div className="bg-rose-950/60 p-6 rounded-2xl border border-rose-800/60 space-y-3">

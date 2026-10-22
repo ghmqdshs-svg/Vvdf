@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Order } from '../types';
 import { Search, Package, Clock, Truck, CheckCircle2, XCircle, AlertCircle, Phone, Hash } from 'lucide-react';
-import { collection, query, where, getDocs, onSnapshot, doc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { onSnapshot, doc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { trackOrderApi } from '../lib/api';
 
 export const OrderTracking: React.FC = () => {
   const [orderNumberInput, setOrderNumberInput] = useState('');
@@ -19,7 +20,7 @@ export const OrderTracking: React.FC = () => {
         setSearchedOrder({ id: docSnap.id, ...docSnap.data() } as Order);
       }
     }, (err) => {
-      console.warn("Track order snapshot error:", err);
+      console.warn("Track order snapshot notice:", err);
     });
     return () => unsub();
   }, [searchedOrder?.id]);
@@ -41,20 +42,14 @@ export const OrderTracking: React.FC = () => {
     let found: Order | null = null;
 
     try {
-      const q = query(
-        collection(db, 'orders'),
-        where('orderNumber', '==', cleanOrderNum)
-      );
-      const snapshot = await getDocs(q);
-      
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as Order;
-        if (data.phone.trim() === cleanPhone) {
-          found = { ...data, id: docSnap.id };
-        }
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'orders');
+      found = await trackOrderApi(cleanOrderNum, cleanPhone);
+      if (found) {
+        setSearchedOrder(found);
+        setIsLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.warn("trackOrderApi error:", err);
     }
 
     // Fallback to local storage if Firestore had network issue or order is local

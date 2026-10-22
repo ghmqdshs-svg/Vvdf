@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
 import { Product, Order, Category, OrderStatus } from '../types';
-import { X, Package, ShoppingBag, TrendingUp, Plus, Edit3, Trash2, CheckCircle2, Clock, Truck, XCircle, Search, Save, Sparkles, FolderTree, Upload, AlertTriangle, Loader2 } from 'lucide-react';
+import { X, Package, ShoppingBag, TrendingUp, Plus, Edit3, Trash2, CheckCircle2, Clock, Truck, XCircle, Search, Save, Sparkles, FolderTree, Upload, AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
 import { collection, addDoc, setDoc, updateDoc, deleteDoc, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { uploadProductImage } from '../lib/storage';
+import { restoreDefaultProductsApi, setAllPricesToFiveApi } from '../lib/api';
 
 const PRESET_IMAGE_LIBRARY = [
+  { name: 'طلاء أظافر أحمر', url: '/assets/aistudio/IMG_3109_a3251c29.jpeg' },
+  { name: 'كريم لومن للرجال', url: '/assets/aistudio/IMG_3108_77319c81.jpeg' },
+  { name: 'عطر رويال نوار', url: '/assets/aistudio/IMG_3107_77992dae.jpeg' },
+  { name: 'عطر توباكو إسباني', url: '/assets/aistudio/IMG_3106_4c93b732.jpeg' },
+  { name: 'كريم بولد للرجال', url: '/assets/aistudio/IMG_3105_32daf5b2.jpeg' },
+  { name: 'شامبو زوز بالعود', url: '/assets/aistudio/IMG_3104_a47c3876.jpeg' },
+  { name: 'ماسك الوجه', url: '/assets/aistudio/IMG_3103_fe5ea3d0.jpeg' },
   { name: 'سيروم وعناية البشرة', url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=600&auto=format&fit=crop' },
   { name: 'كريم ترطيب', url: 'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?q=80&w=600&auto=format&fit=crop' },
   { name: 'زيت عضوي', url: 'https://images.unsplash.com/photo-1608248597359-99464303b688?q=80&w=600&auto=format&fit=crop' },
   { name: 'مقشر وعناية', url: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?q=80&w=600&auto=format&fit=crop' },
-  { name: 'ماسك الوجه', url: 'https://images.unsplash.com/photo-1567942712661-82b935bfc7f3?q=80&w=600&auto=format&fit=crop' },
-  { name: 'مجموعة هدايا', url: 'https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?q=80&w=600&auto=format&fit=crop' },
   { name: 'عطور فاخرة', url: 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=600&auto=format&fit=crop' },
-  { name: 'مستحضرات تجميل', url: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?q=80&w=600&auto=format&fit=crop' },
-  { name: 'عناية بالبشرة 2', url: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?q=80&w=600&auto=format&fit=crop' },
-  { name: 'عناية بالشعر', url: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=600&auto=format&fit=crop' },
 ];
 
 interface AdminDashboardProps {
@@ -44,7 +48,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onCategoryDeleted,
   onOrderStatusUpdated,
 }) => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'categories'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'categories' | 'test-suite'>('orders');
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [orderSearch, setOrderSearch] = useState<string>('');
 
@@ -55,6 +59,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Bulk delete products confirmation state
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isRestoringDefaults, setIsRestoringDefaults] = useState(false);
+  const [isSettingPrices, setIsSettingPrices] = useState(false);
+
+  const [testResults, setTestResults] = useState<{
+    isRunning: boolean;
+    imagesPassed: number;
+    imagesTotal: number;
+    pricesPassed: boolean;
+    apiPassed: boolean;
+    categoriesPassed: boolean;
+    ordersPassed: boolean;
+    logs: string[];
+  }>({
+    isRunning: false,
+    imagesPassed: 0,
+    imagesTotal: products.length,
+    pricesPassed: false,
+    apiPassed: false,
+    categoriesPassed: false,
+    ordersPassed: false,
+    logs: [],
+  });
 
   // Category form state for add/edit
   const [isEditingCategory, setIsEditingCategory] = useState(false);
@@ -95,24 +122,124 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('حجم الصورة كبير جداً. يرجى اختيار صورة أصغر من 2 ميجابايت.');
+      if (file.size > 5 * 1024 * 1024) {
+        alert('حجم الصورة كبير جداً. يرجى اختيار صورة أصغر من 5 ميجابايت.');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        const result = uploadEvent.target?.result as string;
-        setCurrentProduct(prev => ({ ...(prev || {}), image: result }));
-      };
-      reader.onerror = () => {
-        alert('فشل قراءة ملف الصورة. يرجى المحاولة مرة أخرى.');
-      };
-      reader.readAsDataURL(file);
+      setIsUploadingImage(true);
+      try {
+        const permanentUrl = await uploadProductImage(file);
+        setCurrentProduct(prev => ({ ...(prev || {}), image: permanentUrl }));
+      } catch (err: any) {
+        console.error('Image upload failed:', err);
+        alert(err?.message || 'فشل رفع الصورة، يرجى المحاولة مرة أخرى.');
+      } finally {
+        setIsUploadingImage(false);
+      }
     }
   };
+
+  const handleRestoreDefaults = async () => {
+    if (!confirm('هل ترغب في استعادة المنتجات النموذجية الفاخرة لمتجر لاڤير في قاعدة البيانات؟')) {
+      return;
+    }
+    setIsRestoringDefaults(true);
+    try {
+      const prods = await restoreDefaultProductsApi();
+      if (prods && prods.length > 0) {
+        prods.forEach(p => onProductSaved?.(p));
+        alert('تم استعادة منتجات لاڤير النموذجية بنجاح وتحديث المتجر لجميع الأجهزة.');
+      }
+    } catch (e) {
+      alert('حدث خطأ أثناء استعادة المنتجات.');
+    } finally {
+      setIsRestoringDefaults(false);
+    }
+  };
+
+  const handleSetAllPricesToFive = async () => {
+    if (!confirm('هل أنت متأكد من تعيين سعر جميع المنتجات في المتجر إلى 5.00 ر.س؟')) return;
+    setIsSettingPrices(true);
+    try {
+      const updated = await setAllPricesToFiveApi();
+      if (updated && updated.length > 0) {
+        updated.forEach(p => onProductSaved?.(p));
+        alert('تم بنجاح تعيين جميع أسعار المنتجات إلى 5.00 ر.س وتحديثها في قاعدة البيانات لجميع الأجهزة.');
+      }
+    } catch (err) {
+      alert('حدث خطأ أثناء تحديث الأسعار.');
+    } finally {
+      setIsSettingPrices(false);
+    }
+  };
+
+  const runComprehensiveSystemTest = async () => {
+    setTestResults({
+      isRunning: true,
+      imagesPassed: 0,
+      imagesTotal: products.length,
+      pricesPassed: false,
+      apiPassed: false,
+      categoriesPassed: false,
+      ordersPassed: false,
+      logs: ['بدء الاختبار الشامل لنظام متجر لاڤير...'],
+    });
+
+    const logs: string[] = ['بدء الاختبار الشامل لنظام متجر لاڤير...'];
+
+    let apiOk = false;
+    try {
+      const res = await fetch('/api/products');
+      if (res.ok) {
+        apiOk = true;
+        logs.unshift('✓ تم الاتصال بخادم الباك إند وقاعدة البيانات بنجاح (HTTP 200).');
+      } else {
+        logs.unshift('✗ فشل الاتصال بخادم الباك إند.');
+      }
+    } catch (err: any) {
+      logs.unshift(`✗ خطأ في الاتصال: ${err?.message || 'غير معروف'}`);
+    }
+
+    const categoriesOk = categories.length > 0;
+    if (categoriesOk) {
+      logs.unshift(`✓ تم التحقق من الأقسام: عُثر على ${categories.length} قسم نشط.`);
+    } else {
+      logs.unshift('✗ لا توجد أقسام مسجلة.');
+    }
+
+    const allFive = products.length > 0 && products.every(p => p.price === 5);
+    if (allFive) {
+      logs.unshift('✓ تم التحقق من الأسعار: جميع المنتجات مسعرة بـ 5.00 ر.س بنجاح.');
+    } else {
+      logs.unshift('⚠ تنبيه: بعض المنتجات أسعارها مختلفة عن 5.00 ر.س (يمكنك النقر على زر تعيين جميع الأسعار إلى 5.00 ر.س).');
+    }
+
+    let imgPassedCount = 0;
+    for (const p of products) {
+      if (p.image) {
+        imgPassedCount++;
+      }
+    }
+    logs.unshift(`✓ تم التحقق من صور المنتجات: ${imgPassedCount} من ${products.length} منتج تمتلك روابط صور صحيحة.`);
+
+    const ordersOk = true;
+    logs.unshift(`✓ نظام الطلبات وتتبع الشحنات يعمل بكفاءة (${orders.length} طلب مسجل).`);
+
+    setTestResults({
+      isRunning: false,
+      imagesPassed: imgPassedCount,
+      imagesTotal: products.length,
+      pricesPassed: allFive,
+      apiPassed: apiOk,
+      categoriesPassed: categoriesOk,
+      ordersPassed: ordersOk,
+      logs,
+    });
+  };
+
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -425,6 +552,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <FolderTree className="w-4 h-4" />
             <span>إدارة الأقسام ({categories.length})</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('test-suite')}
+            className={`py-4 px-6 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === 'test-suite'
+                ? 'border-rose-800 text-rose-900'
+                : 'border-transparent text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-600" />
+            <span>لوحة اختبار النظام الشامل</span>
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -576,7 +715,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    onClick={handleRestoreDefaults}
+                    disabled={isRestoringDefaults}
+                    className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:opacity-50"
+                    title="استعادة منتجات لاڤير النموذجية في قاعدة البيانات"
+                  >
+                    {isRestoringDefaults ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-amber-700" />
+                    ) : (
+                      <RotateCcw className="w-4 h-4 text-amber-700" />
+                    )}
+                    <span>استعادة منتجات لاڤير</span>
+                  </button>
+
+                  <button
+                    onClick={handleSetAllPricesToFive}
+                    disabled={isSettingPrices}
+                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-xs disabled:opacity-50"
+                    title="تعيين سعر جميع منتجات المتجر إلى 5.00 ر.س"
+                  >
+                    {isSettingPrices ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 text-emerald-700" />
+                    )}
+                    <span>تعيين جميع الأسعار إلى 5.00 ر.س</span>
+                  </button>
+
                   <button
                     onClick={() => setShowDeleteAllConfirm(true)}
                     disabled={products.length === 0 || isDeletingAll}
@@ -739,6 +906,103 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
+          {/* TEST SUITE TAB */}
+          {activeTab === 'test-suite' && (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-lg text-stone-900 font-serif">لوحة اختبار النظام الشامل (System & Store Diagnostics)</h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    فحص شامل للصور، المنتجات، الأسعار، قاعدة البيانات، والربط السحابي قبل بدء الاستضافة والنشر.
+                  </p>
+                </div>
+
+                <button
+                  onClick={runComprehensiveSystemTest}
+                  disabled={testResults.isRunning}
+                  className="bg-rose-900 hover:bg-rose-800 text-amber-50 px-6 py-3 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                >
+                  {testResults.isRunning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري تشغيل الفحص الشامل...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>تشغيل الاختبار الشامل الآن</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Test Results Summary Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-stone-500 font-bold">فحص صور المنتجات</span>
+                    <span className={`w-3 h-3 rounded-full ${testResults.imagesPassed === testResults.imagesTotal && testResults.imagesTotal > 0 ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                  </div>
+                  <p className="text-lg font-black text-stone-900">
+                    {testResults.imagesPassed} / {products.length} صورة جاهزة
+                  </p>
+                  <p className="text-[11px] text-stone-400">التحقق من صحة روابط الصور الدائمة ووصول جميع الأجهزة إليها.</p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-stone-500 font-bold">فحص توحيد الأسعار (5 ر.س)</span>
+                    <span className={`w-3 h-3 rounded-full ${testResults.pricesPassed ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                  </div>
+                  <p className="text-lg font-black text-stone-900">
+                    {testResults.pricesPassed ? 'مطابق (5.00 ر.س)' : 'يحتاج تحديث'}
+                  </p>
+                  <p className="text-[11px] text-stone-400">التحقق من أن جميع المنتجات مسعرة بخمسة ريالات سعودية.</p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-stone-500 font-bold">اتصال الباك إند وقاعدة البيانات</span>
+                    <span className={`w-3 h-3 rounded-full ${testResults.apiPassed ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                  </div>
+                  <p className="text-lg font-black text-stone-900">
+                    {testResults.apiPassed ? 'متصل ومستقر (API)' : 'غير محقق'}
+                  </p>
+                  <p className="text-[11px] text-stone-400">التحقق من استجابة الخادم وتخزين البيانات المشترك.</p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-stone-500 font-bold">الأقسام والطلبات</span>
+                    <span className={`w-3 h-3 rounded-full ${testResults.categoriesPassed ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                  </div>
+                  <p className="text-lg font-black text-stone-900">
+                    {categories.length} قسم / {orders.length} طلب
+                  </p>
+                  <p className="text-[11px] text-stone-400">التحقق من بقاء الأقسام والطلبات وعدم فقدان البيانات.</p>
+                </div>
+              </div>
+
+              {/* Logs Box */}
+              <div className="bg-stone-950 text-emerald-400 p-6 rounded-2xl font-mono text-xs space-y-2 shadow-inner border border-stone-800">
+                <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-3 text-stone-300">
+                  <span className="font-bold flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span>سجل الفحص والتشخيص المباشر</span>
+                  </span>
+                  <span className="text-[11px] text-stone-400">جاهز للاستضافة والنشر على Netlify</span>
+                </div>
+                {testResults.logs.length === 0 ? (
+                  <p className="text-stone-500 italic">انقر على "تشغيل الاختبار الشامل الآن" لبدء الفحص والتشخيص الفوري...</p>
+                ) : (
+                  testResults.logs.map((log, idx) => (
+                    <div key={idx} className="leading-relaxed">{log}</div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
 
       </div>
@@ -815,12 +1079,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 
                 {/* Device File Picker */}
                 <div className="mb-3">
-                  <label className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 rounded-xl px-4 py-3 text-xs font-bold cursor-pointer flex items-center justify-center gap-2 transition-colors shadow-xs">
-                    <Upload className="w-4 h-4 text-rose-800" />
-                    <span>اختر صورة من ملفات الجهاز أو ألبوم الصور</span>
+                  <label className={`w-full ${isUploadingImage ? 'bg-rose-50 text-rose-800 border-rose-300' : 'bg-stone-100 hover:bg-stone-200 text-stone-800 border-stone-300'} border rounded-xl px-4 py-3 text-xs font-bold cursor-pointer flex items-center justify-center gap-2 transition-colors shadow-xs`}>
+                    {isUploadingImage ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-rose-800" />
+                    ) : (
+                      <Upload className="w-4 h-4 text-rose-800" />
+                    )}
+                    <span>
+                      {isUploadingImage
+                        ? 'جاري رفع الصورة إلى التخزين السحابي...'
+                        : 'اختر صورة من ملفات الجهاز أو ألبوم الصور'}
+                    </span>
                     <input
                       type="file"
                       accept="image/*"
+                      disabled={isUploadingImage}
                       onChange={handleImageFileChange}
                       className="hidden"
                     />

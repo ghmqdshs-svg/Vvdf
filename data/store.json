@@ -1,0 +1,246 @@
+{
+  "categories": [
+    {
+      "id": "cat_1",
+      "name": "قسم الرجال",
+      "slug": "mens-care"
+    },
+    {
+      "id": "cat_2",
+      "name": "قسم النساء",
+      "slug": "womens-care"
+    },
+    {
+      "id": "cat_3",
+      "name": "الكريمات والعناية بالبشرة",
+      "slug": "skincare"
+    },
+    {
+      "id": "cat_4",
+      "name": "الشعر والشامبو",
+      "slug": "haircare"
+    },
+    {
+      "id": "cat_5",
+      "name": "قسم الماسكات",
+      "slug": "masks"
+    },
+    {
+      "id": "cat_6",
+      "name": "قسم الأظافر",
+      "slug": "nails"
+    },
+    {
+      "id": "cat_7",
+      "name": "قسم العطور",
+      "slug": "perfumes"
+    },
+    {
+      "id": "cat_8",
+      "name": "عناية بالجسم",
+      "slug": "bodycare"
+    },
+    {
+      "id": "cat_9",
+      "name": "مجموعات هدايا",
+      "slug": "sets"
+    }
+  ],
+  "products": [
+    {
+      "id": "prod_img_face_mask",
+      "name": "ماسك الوجه لافيرا",
+      "description": "ماسك ورقي طبيعي مرطب للوجه مستخلص من الفواكه المنعشة والألوفيرا لترطيب البشرة واستعادة نضارتها وحيويتها وإشراقتها الفورية.",
+      "price": 5,
+      "stock": 60,
+      "category": "masks",
+      "categories": [
+        "masks",
+        "womens-care"
+      ],
+      "image": "/assets/aistudio/IMG_3103_fe5ea3d0.jpeg",
+      "ingredients": "خلاصة الألوفيرا الطبيعية، مستخلص الرمان، الأفوكادو، حمض الهيالورونيك، فيتامين C",
+      "createdAt": "2026-10-22T10:16:00.000Z"
+    },
+    {
+      "id": "prod_img_zousz_oud",
+      "name": "شامبو العناية بالشعر زوز لافيرا",
+      "description": "شامبو ومجموعة العود الأسود زوز الفاخرة للعناية الفائقة بالشعر واللحية بخلاصة الزيوت المغذية ورائحة العود الآسرة لإطلالة رجالية جذابة.",
+      "price": 5,
+      "stock": 35,
+      "category": "haircare",
+      "categories": [
+        "haircare",
+        "mens-care"
+      ],
+      "image": "/assets/aistudio/IMG_3104_a47c3876.jpeg",
+      "ingredients": "زيت العود الأسود الطبيعي، زيت الأركان المغربي، كيراتين طبيعي، زيت اللوز الحلو",
+      "createdAt": "2026-10-22T10:15:00.000Z"
+    },
+    {
+      "id": "prod_img_bolde_skincare",
+      "name": "كريم بولد للعناية بالبشرة للرجال لافيرا",
+      "description": "مجموعة كريمات بولد النهارية والليلية مع غسول الوجه لتوفير ترطيب عميق وحماية البشرة ومقاومة علامات الإجهاد اليومي للرجال.",
+      "price": 5,
+      "stock": 45,
+      "category": "skincare",
+      "categories": [
+        "skincare",
+        "mens-care"
+      ],
+      "image": "/assets/aistudio/IMG_3105_32daf5b2.jpeg",
+      "ingredients": "أحماض ألفا وبيتا هيدروكسي AHA و BHA، حمض الهيالورونيك، خلاصة الصبار، فيتامين E",
+      "createdAt": "2026-10-22T10:14:00.000Z"
+    },
+    {
+      "id": "prod_img_spanish_tobacco",
+      "name": "عطر توباكو إسباني لافيرا",
+      "description": "عطر توباكو إسباني فاخر مستخلص بتركيز إكستريت دو بارفان بحجم 100 مل، توليفة ملكية من التبغ الإسباني الدافئ مع لمسات العنبر والفانيليا الفاخرة للجنسين.",
+      "price": 5,
+      "stock": 30,
+      "category": "perfumes",
+      "categories": [
+        "perfumes",
+        "mens-care",
+        "womens-care"
+      ],
+      "image": "/assets/aistudio/IMG_3106_4c93b732.jpeg",
+      "ingredients": "أوراق التبغ الإسباني المعتق، عنبر ملكي، حبوب التونكا، خشب الأرز، فانيليا طبيعية",
+      "createdAt": "2026-10-22T10:13:00.000Z"
+    },
+    {
+      "id": "prod_img_royale_noir",
+      "name": "عطر رويال نوار لافيرا",
+      "description": "مجموعة عطور رويال نوار الفاخرة بتركيز إكستريت دو بارفان بنفحات شرقية وخشبية فواحة وثبات استثنائي يعكس الفخامة والجاذبية للرجال.",
+      "price": 5,
+      "stock": 35,
+      "category": "perfumes",
+      "categories": [
+        "perfumes",
+        "mens-care"
+      ],
+      "image": "/assets/aistudio/IMG_3107_77992dae.jpeg",
+      "ingredients": "عود ملكي، نجيل الهند، جلود إيطالية فاخرة، عنبر، بهارات حارة دافئة",
+      "createdAt": "2026-10-22T10:12:00.000Z"
+    },
+    {
+      "id": "prod_img_lumin_skincare",
+      "name": "كريم لومن للعناية بالبشرة لافيرا",
+      "description": "مجموعة كريمات لومن المتطورة للعناية ببشرة الرجل تشمل كريم الترطيب اليومي ومضاد الهالات وغسول الفحم المنقي لترطيب وتجديد نضارة الوجه.",
+      "price": 5,
+      "stock": 40,
+      "category": "skincare",
+      "categories": [
+        "skincare",
+        "mens-care"
+      ],
+      "image": "/assets/aistudio/IMG_3108_77319c81.jpeg",
+      "ingredients": "فحم نشط منقي، زبدة الشيا، نياسيناميد B3، خلاصة الشاي الأخضر",
+      "createdAt": "2026-10-22T10:11:00.000Z"
+    },
+    {
+      "id": "prod_img_nail_polish",
+      "name": "طلاء أظافر أحمر لافيرا",
+      "description": "طلاء أظافر أحمر كلاسيكي بلون غني وثابت يدوم طويلاً مع لمعان فائق يجف سريعاً لحماية وتجميل الأظافر.",
+      "price": 5,
+      "stock": 50,
+      "category": "nails",
+      "categories": [
+        "nails",
+        "womens-care"
+      ],
+      "image": "/assets/aistudio/IMG_3109_a3251c29.jpeg",
+      "ingredients": "مكونات نباتية مقوية للأظافر، صبغات لونية نقية غنية، خالي من المواد الضارة",
+      "createdAt": "2026-10-22T10:10:00.000Z"
+    },
+    {
+      "id": "prod_1",
+      "name": "عطر لاڤير رويال الفاخر (Laver Royal)",
+      "description": "عطر أرستقراطي يجمع بين نفحات العود الملكي المعتّق والمسك الأبيض مع لمسات زهرية ساحرة تدوم طوال اليوم.",
+      "price": 5,
+      "stock": 25,
+      "category": "perfumes",
+      "image": "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=600&auto=format&fit=crop",
+      "ingredients": "عود معتق، مسك أبيض، عنبر، زهور البرتقال، برغموت إيطالي",
+      "createdAt": "2026-10-22T00:00:00.000Z"
+    },
+    {
+      "id": "prod_2",
+      "name": "سيروم الهيالورونيك وفيتامين C المركز",
+      "description": "سيروم فائق الفعالية لترطيب البشرة بعمق، توحيد لونها ومحاربة علامات التقدم بالسن بفضل مضادات الأكسدة المركزة.",
+      "price": 5,
+      "stock": 35,
+      "category": "skincare",
+      "image": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=600&auto=format&fit=crop",
+      "ingredients": "حمض الهيالورونيك النقي، فيتامين سي المستقر، خلاصة الصبار العضوي، فيتامين E",
+      "createdAt": "2026-10-22T00:05:00.000Z"
+    },
+    {
+      "id": "prod_3",
+      "name": "كريم لاڤير الملكي لترطيب وتجديد الخلايا",
+      "description": "تركيبة مخملية فاخرة تغذي حاجز البشرة وترطبها لمدة تصل إلى 48 ساعة دون أي ملمس دهني.",
+      "price": 5,
+      "stock": 40,
+      "category": "skincare",
+      "image": "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?q=80&w=600&auto=format&fit=crop",
+      "ingredients": "زبدة الشيا العضوية، زيت الجوجوبا الذهبي، سيراميد نباتي، نياسيناميد",
+      "createdAt": "2026-10-22T00:10:00.000Z"
+    },
+    {
+      "id": "prod_4",
+      "name": "زيت لاڤير المعالج والمقوي للشعر",
+      "description": "مزيج طبيعي معزز بخلاصة إكليل الجبل وزيت الأرجان المغربي لتحفيز نمو الشعر ومنع التساقط وإعطائه لمعاناً حريرياً.",
+      "price": 5,
+      "stock": 20,
+      "category": "haircare",
+      "image": "https://images.unsplash.com/photo-1608248597359-99464303b688?q=80&w=600&auto=format&fit=crop",
+      "ingredients": "زيت إكليل الجبل المركز، زيت الأرجان النقي، زيت اللوز الحلو، زيت الخروع العضوي",
+      "createdAt": "2026-10-22T00:15:00.000Z"
+    },
+    {
+      "id": "prod_5",
+      "name": "مقشر القهوة وزبدة الكاكاو للجسم",
+      "description": "مقشر طبيعي فاخر يزيل خلايا الجلد الميتة ويقلل من مظهر التصبغات والمسام ويترك الجسم ناعماً ومعطراً برائحة آسرة.",
+      "price": 5,
+      "stock": 30,
+      "category": "bodycare",
+      "image": "https://images.unsplash.com/photo-1586495777744-4413f21062fa?q=80&w=600&auto=format&fit=crop",
+      "ingredients": "حبوب قهوة أرابيكا مطحونة، سكر قصب عضوي، زبدة كاكاو، زيت جوز الهند البكر",
+      "createdAt": "2026-10-22T00:20:00.000Z"
+    },
+    {
+      "id": "prod_6",
+      "name": "غسول الوجه الرغوي المنقي والمهدئ",
+      "description": "رغوة لطيفة تنظف أعماق المسام وتزيل الدهون والشوائب دون تجريد البشرة من ترطيبها الطبيعي.",
+      "price": 5,
+      "stock": 50,
+      "category": "skincare",
+      "image": "https://images.unsplash.com/photo-1556228720-195a672e8a03?q=80&w=600&auto=format&fit=crop",
+      "ingredients": "مستخلص الشاي الأخضر، البابونج المهدئ، حمض الساليسيليك اللطيف، ماء الورد",
+      "createdAt": "2026-10-22T00:25:00.000Z"
+    },
+    {
+      "id": "prod_7",
+      "name": "سيروم لاڤير الرجالي للعناية باللحية والشعر",
+      "description": "تركيبة متطورة غير دهنية ترطب اللحية وتمنحها مظهراً صحياً وأنيقاً وتغذي جذور الشعر.",
+      "price": 5,
+      "stock": 25,
+      "category": "mens-care",
+      "image": "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=600&auto=format&fit=crop",
+      "ingredients": "زيت خشب الصندل، زيت الجوجوبا، فيتامين ب5، كيراتين نباتي",
+      "createdAt": "2026-10-22T00:30:00.000Z"
+    },
+    {
+      "id": "prod_8",
+      "name": "بكج لاڤير الملكي الفاخر (مجموعة هدايا متكاملة)",
+      "description": "الصندوق الملكي الأكثر طلباً، يشمل العطر الفاخر والسيروم وزيت الشعر ومقشر الجسم في بوكس إهداء فاخر.",
+      "price": 5,
+      "stock": 15,
+      "category": "sets",
+      "image": "https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?q=80&w=600&auto=format&fit=crop",
+      "ingredients": "تشكيلة متكاملة من أندر المكونات الطبيعية والزيوت الأساسية الفاخرة",
+      "createdAt": "2026-10-22T00:35:00.000Z"
+    }
+  ],
+  "orders": []
+}

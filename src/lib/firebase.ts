@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import localConfig from '../../firebase-applet-config.json';
 
 // Netlify environment variable support with seamless fallback to local configuration
@@ -21,6 +22,7 @@ const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+export const storage = getStorage(app, firebaseConfig.storageBucket);
 export { firebaseConfig };
 
 export enum OperationType {

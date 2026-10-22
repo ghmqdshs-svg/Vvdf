@@ -5,6 +5,7 @@ export interface Product {
   price: number;
   stock: number;
   category: string;
+  categories?: string[];
   image: string;
   ingredients: string;
   createdAt?: string;

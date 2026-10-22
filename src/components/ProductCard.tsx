@@ -16,12 +16,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   categoryMap = {},
 }) => {
   const defaultCategoryNames: Record<string, string> = {
-    'mens-care': 'عناية الرجال',
-    'womens-care': 'عناية النساء',
-    skincare: 'عناية بالبشرة',
-    haircare: 'عناية بالشعر',
+    'mens-care': 'قسم الرجال',
+    'womens-care': 'قسم النساء',
+    skincare: 'الكريمات والعناية بالبشرة',
+    haircare: 'الشعر والشامبو',
+    masks: 'قسم الماسكات',
+    nails: 'قسم الأظافر',
+    perfumes: 'قسم العطور',
     bodycare: 'عناية بالجسم',
-    perfumes: 'عطور ومستحضرات',
     sets: 'مجموعات هدايا',
   };
   const categoryNames = { ...defaultCategoryNames, ...categoryMap };
