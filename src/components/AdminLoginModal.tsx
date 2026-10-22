@@ -45,7 +45,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             <Lock className="w-6 h-6" />
           </div>
           <h3 className="text-xl font-bold text-stone-900 font-serif">تسجيل دخول الإدارة</h3>
-          <p className="text-xs text-stone-500">لوحة تحكم مخصصة لإدارة المنتجات والطلبات (الرمز الافتراضي: 1234)</p>
+          <p className="text-xs text-stone-500">لوحة تحكم مخصصة لإدارة المنتجات والطلبات</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
@@ -65,7 +65,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 text-stone-900 text-center tracking-widest"
             />
             {error && (
-              <p className="text-rose-600 text-[11px] mt-1.5 font-bold">كلمة المرور غير صحيحة. (جرب: 1234)</p>
+              <p className="text-rose-600 text-[11px] mt-1.5 font-bold">كلمة المرور غير صحيحة.</p>
             )}
           </div>
 

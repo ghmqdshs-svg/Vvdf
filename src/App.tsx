@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, Order, CartItem, Category } from './types';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, onSnapshot, addDoc, doc, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -14,16 +14,16 @@ import { AdminLoginModal } from './components/AdminLoginModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Footer } from './components/Footer';
 
-import { Sparkles, Filter, ArrowRight, ShieldCheck, Truck, RefreshCw } from 'lucide-react';
+import { Sparkles, Filter, ArrowRight, ShieldCheck, Truck, AlertTriangle } from 'lucide-react';
 
-const DEFAULT_CATEGORIES = [
-  { name: 'عناية الرجال', slug: 'mens-care' },
-  { name: 'عناية النساء', slug: 'womens-care' },
-  { name: 'عناية بالبشرة', slug: 'skincare' },
-  { name: 'عناية بالشعر', slug: 'haircare' },
-  { name: 'عناية بالجسم', slug: 'bodycare' },
-  { name: 'عطور ومستحضرات', slug: 'perfumes' },
-  { name: 'مجموعات هدايا', slug: 'sets' },
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: 'c1', name: 'عناية الرجال', slug: 'mens-care' },
+  { id: 'c2', name: 'عناية النساء', slug: 'womens-care' },
+  { id: 'c3', name: 'عناية بالبشرة', slug: 'skincare' },
+  { id: 'c4', name: 'عناية بالشعر', slug: 'haircare' },
+  { id: 'c5', name: 'عناية بالجسم', slug: 'bodycare' },
+  { id: 'c6', name: 'عطور ومستحضرات', slug: 'perfumes' },
+  { id: 'c7', name: 'مجموعات هدايا', slug: 'sets' },
 ];
 
 export default function App() {
@@ -31,10 +31,20 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => {
+    const saved = localStorage.getItem('laver_products');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [categories, setCategories] = useState<Category[]>(() => {
+    const saved = localStorage.getItem('laver_categories');
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+  });
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const saved = localStorage.getItem('laver_orders');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [quotaExceeded, setQuotaExceeded] = useState<boolean>(false);
 
   // Modals
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -44,98 +54,87 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState<boolean>(false);
 
-  // Firestore real-time sync for products, categories & orders
+  // Save to localStorage as backup/fallback cache
   useEffect(() => {
-    const unsubProducts = onSnapshot(
-      collection(db, 'products'),
-      (snapshot) => {
-        const list: Product[] = [];
-        snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() } as Product);
-        });
-        setProducts(list);
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'products')
-    );
+    localStorage.setItem('laver_products', JSON.stringify(products));
+  }, [products]);
 
-    const unsubCategories = onSnapshot(
-      collection(db, 'categories'),
-      (snapshot) => {
-        const list: Category[] = [];
-        snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() } as Category);
-        });
-        setCategories(list);
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'categories')
-    );
+  useEffect(() => {
+    localStorage.setItem('laver_categories', JSON.stringify(categories));
+  }, [categories]);
 
-    const unsubOrders = onSnapshot(
-      collection(db, 'orders'),
-      (snapshot) => {
-        const list: Order[] = [];
-        snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() } as Order);
-        });
-        setOrders(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'orders')
-    );
+  useEffect(() => {
+    localStorage.setItem('laver_orders', JSON.stringify(orders));
+  }, [orders]);
+
+  // Firestore real-time sync with fallback
+  useEffect(() => {
+    let unsubProducts: (() => void) | undefined;
+    let unsubCategories: (() => void) | undefined;
+    let unsubOrders: (() => void) | undefined;
+
+    try {
+      unsubProducts = onSnapshot(
+        collection(db, 'products'),
+        (snapshot) => {
+          const list: Product[] = [];
+          snapshot.forEach((docSnap) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as Product);
+          });
+          if (list.length > 0) setProducts(list);
+        },
+        (error) => {
+          if (error.message.includes('Quota') || error.message.includes('quota')) {
+            setQuotaExceeded(true);
+          }
+          handleFirestoreError(error, OperationType.LIST, 'products');
+        }
+      );
+
+      unsubCategories = onSnapshot(
+        collection(db, 'categories'),
+        (snapshot) => {
+          const list: Category[] = [];
+          snapshot.forEach((docSnap) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as Category);
+          });
+          if (list.length > 0) setCategories(list);
+        },
+        (error) => {
+          if (error.message.includes('Quota') || error.message.includes('quota')) {
+            setQuotaExceeded(true);
+          }
+          handleFirestoreError(error, OperationType.LIST, 'categories');
+        }
+      );
+
+      unsubOrders = onSnapshot(
+        collection(db, 'orders'),
+        (snapshot) => {
+          const list: Order[] = [];
+          snapshot.forEach((docSnap) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as Order);
+          });
+          if (list.length > 0) {
+            setOrders(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          }
+        },
+        (error) => {
+          if (error.message.includes('Quota') || error.message.includes('quota')) {
+            setQuotaExceeded(true);
+          }
+          handleFirestoreError(error, OperationType.LIST, 'orders');
+        }
+      );
+    } catch (err) {
+      setQuotaExceeded(true);
+    }
 
     return () => {
-      unsubProducts();
-      unsubCategories();
-      unsubOrders();
+      if (unsubProducts) unsubProducts();
+      if (unsubCategories) unsubCategories();
+      if (unsubOrders) unsubOrders();
     };
-  }, []);
-
-  // Seed default categories if none exist in Firestore
-  useEffect(() => {
-    const seedCategories = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'categories'));
-        if (snap.empty) {
-          for (const cat of DEFAULT_CATEGORIES) {
-            await addDoc(collection(db, 'categories'), cat);
-          }
-        }
-      } catch (err) {
-        console.error("Error seeding categories:", err);
-      }
-    };
-    const timer = setTimeout(() => {
-      seedCategories();
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Clear demo / dummy products on startup once if any exist, while keeping orders and settings untouched
-  useEffect(() => {
-    const clearDummyProducts = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'products'));
-        const dummyNames = [
-          'سيروم فيتامين سي النقي لإشراقة البشرة',
-          'كريم الترطيب العميق بزبدة الشيا وحمض الهيالورونيك',
-          'زيت الأركان المغربي العضوي النقي للشعر والجسم',
-          'مقشر الشفايف المغذي بالتوت البري والعسل',
-          'ماسك الطين النقي لتنقية المسام وتقليل اللمعان',
-          'مجموعة عناية الشعر الملكية بالكيراتين والزيوت',
-          'عطر الجسم والملابس الفاخر برائحة الفانيليا والمسك',
-          'سيروم نمو وترطيب الرموش والحواجب المكثف'
-        ];
-        
-        for (const docSnap of snap.docs) {
-          const data = docSnap.data();
-          if (data.name && dummyNames.includes(data.name)) {
-            await deleteDoc(doc(db, 'products', docSnap.id));
-          }
-        }
-      } catch (err) {
-        console.error("Error clearing dummy products:", err);
-      }
-    };
-    clearDummyProducts();
   }, []);
 
   // Cart actions
@@ -169,7 +168,7 @@ export default function App() {
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
-  // Submit Order
+  // Submit Order with Firestore & local fallback
   const handleSubmitOrder = async (orderDetails: {
     customerName: string;
     phone: string;
@@ -201,13 +200,31 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
 
-    await addDoc(collection(db, 'orders'), newOrderData);
-    setCart([]); // Clear cart
+    try {
+      await addDoc(collection(db, 'orders'), newOrderData);
+    } catch (err) {
+      // Fallback local order
+      const localOrder: Order = {
+        id: 'local_' + Date.now(),
+        ...newOrderData,
+      };
+      setOrders(prev => [localOrder, ...prev]);
+    }
+
+    setCart([]);
     return orderNumber;
   };
 
+  // 6-hour expiration window for products
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+  const activeProducts = products.filter((p) => {
+    if (!p.createdAt) return true;
+    const age = Date.now() - new Date(p.createdAt).getTime();
+    return age <= SIX_HOURS_MS;
+  });
+
   // Filtered products list
-  const filteredProducts = products.filter((p) => {
+  const filteredProducts = activeProducts.filter((p) => {
     const matchesCat = selectedCategory === 'all' || p.category === selectedCategory;
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -218,6 +235,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans selection:bg-rose-200 selection:text-rose-900">
       
+      {/* Quota Exceeded Banner */}
+      {quotaExceeded && (
+        <div className="bg-amber-500 text-stone-950 px-4 py-2 text-center text-xs font-bold flex items-center justify-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          <span>تنبيه: تم استنفاد الحد اليومي المجاني لقاعدة البيانات (Firestore Quota). يعمل المتجر حالياً بوضع التخزين المؤقت المحلي.</span>
+        </div>
+      )}
+
       {/* Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -252,7 +277,7 @@ export default function App() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
                   {categories.map((cat) => (
                     <div
-                      key={cat.id}
+                      key={cat.id || cat.slug}
                       onClick={() => {
                         setSelectedCategory(cat.slug);
                         setActiveTab('products');
@@ -355,7 +380,7 @@ export default function App() {
                 </button>
                 {categories.map((cat) => (
                   <button
-                    key={cat.id}
+                    key={cat.id || cat.slug}
                     onClick={() => setSelectedCategory(cat.slug)}
                     className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
                       selectedCategory === cat.slug

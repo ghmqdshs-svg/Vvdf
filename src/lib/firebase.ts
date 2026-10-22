@@ -41,8 +41,13 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errMessage = error instanceof Error ? error.message : String(error);
+  if (errMessage.includes('Quota exceeded') || errMessage.includes('quota')) {
+    console.warn('Firestore Quota Exceeded. Operating in cached/fallback mode.');
+    return;
+  }
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
