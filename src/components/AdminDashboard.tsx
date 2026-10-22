@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Product, Order, Category, OrderStatus } from '../types';
-import { X, Package, ShoppingBag, TrendingUp, Plus, Edit3, Trash2, CheckCircle2, Clock, Truck, XCircle, Search, Save, Sparkles, FolderTree, Upload } from 'lucide-react';
-import { collection, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { X, Package, ShoppingBag, TrendingUp, Plus, Edit3, Trash2, CheckCircle2, Clock, Truck, XCircle, Search, Save, Sparkles, FolderTree, Upload, AlertTriangle, Loader2 } from 'lucide-react';
+import { collection, addDoc, setDoc, updateDoc, deleteDoc, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 
 const PRESET_IMAGE_LIBRARY = [
@@ -23,6 +23,12 @@ interface AdminDashboardProps {
   products: Product[];
   categories: Category[];
   orders: Order[];
+  onProductSaved?: (product: Product) => void;
+  onProductDeleted?: (productId: string) => void;
+  onClearAllProducts?: () => void;
+  onCategorySaved?: (category: Category) => void;
+  onCategoryDeleted?: (categoryId: string) => void;
+  onOrderStatusUpdated?: (orderId: string, newStatus: OrderStatus) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -31,6 +37,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   products,
   categories,
   orders,
+  onProductSaved,
+  onProductDeleted,
+  onClearAllProducts,
+  onCategorySaved,
+  onCategoryDeleted,
+  onOrderStatusUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'categories'>('orders');
   const [orderFilter, setOrderFilter] = useState<string>('all');
@@ -39,6 +51,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Product form state for add/edit
   const [isEditingProduct, setIsEditingProduct] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<Partial<Product> | null>(null);
+
+  // Bulk delete products confirmation state
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   // Category form state for add/edit
   const [isEditingCategory, setIsEditingCategory] = useState(false);
@@ -65,6 +81,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
 
   const handleUpdateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
+    onOrderStatusUpdated?.(orderId, newStatus);
     try {
       const orderRef = doc(db, 'orders', orderId);
       await updateDoc(orderRef, {
@@ -99,36 +116,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentProduct?.name || !currentProduct?.price || !currentProduct?.category) {
-      alert('يرجى إدخال اسم المنتج والسعر والتصنيف');
+    const prodCategory = currentProduct?.category || categories[0]?.slug || 'skincare';
+    if (!currentProduct?.name || currentProduct?.price === undefined || isNaN(Number(currentProduct.price))) {
+      alert('يرجى إدخال اسم المنتج والسعر والتصنيف بشكل صحيح.');
       return;
     }
 
     try {
       if (currentProduct.id) {
         // Update
-        const prodRef = doc(db, 'products', currentProduct.id);
-        await updateDoc(prodRef, {
+        const updatedProd: Product = {
+          id: currentProduct.id,
           name: currentProduct.name,
           description: currentProduct.description || '',
           price: Number(currentProduct.price),
           stock: Number(currentProduct.stock || 0),
-          category: currentProduct.category,
+          category: prodCategory,
           image: currentProduct.image || 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=600&auto=format&fit=crop',
           ingredients: currentProduct.ingredients || '',
+          createdAt: currentProduct.createdAt || new Date().toISOString(),
+        };
+        onProductSaved?.(updatedProd);
+        const prodRef = doc(db, 'products', currentProduct.id);
+        await updateDoc(prodRef, {
+          name: updatedProd.name,
+          description: updatedProd.description,
+          price: updatedProd.price,
+          stock: updatedProd.stock,
+          category: updatedProd.category,
+          image: updatedProd.image,
+          ingredients: updatedProd.ingredients,
         });
         alert('تم تعديل المنتج وحفظه بنجاح في قاعدة البيانات.');
       } else {
         // Create
-        await addDoc(collection(db, 'products'), {
+        const newDocRef = doc(collection(db, 'products'));
+        const newProd: Product = {
+          id: newDocRef.id,
           name: currentProduct.name,
           description: currentProduct.description || '',
           price: Number(currentProduct.price),
           stock: Number(currentProduct.stock || 0),
-          category: currentProduct.category,
+          category: prodCategory,
           image: currentProduct.image || 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=600&auto=format&fit=crop',
           ingredients: currentProduct.ingredients || '',
           createdAt: new Date().toISOString(),
+        };
+        onProductSaved?.(newProd);
+        await setDoc(newDocRef, {
+          name: newProd.name,
+          description: newProd.description,
+          price: newProd.price,
+          stock: newProd.stock,
+          category: newProd.category,
+          image: newProd.image,
+          ingredients: newProd.ingredients,
+          createdAt: newProd.createdAt,
         });
         alert('تم إضافة المنتج الجديد بنجاح إلى قاعدة البيانات السحابية.');
       }
@@ -142,6 +185,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleDeleteProduct = async (productId: string) => {
     if (confirm('هل أنت متأكد من رغبتك في حذف هذا المنتج نهائياً من قاعدة البيانات؟')) {
+      onProductDeleted?.(productId);
       try {
         await deleteDoc(doc(db, 'products', productId));
         alert('تم حذف المنتج بنجاح من قاعدة البيانات.');
@@ -149,6 +193,61 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         handleFirestoreError(error, OperationType.DELETE, `products/${productId}`);
         alert('حدث خطأ أثناء محاولة حذف المنتج. يرجى المحاولة مرة أخرى.');
       }
+    }
+  };
+
+  const handleDeleteAllProducts = async () => {
+    setIsDeletingAll(true);
+    try {
+      // 1. Optimistic update to clear products instantly in the UI without page refresh
+      onClearAllProducts?.();
+
+      // 2. Fetch all products strictly from the 'products' collection
+      const productsSnapshot = await getDocs(collection(db, 'products'));
+
+      // 3. Batch delete all documents in 'products' collection
+      if (!productsSnapshot.empty) {
+        const batch = writeBatch(db);
+        let count = 0;
+        const commitPromises: Promise<void>[] = [];
+
+        productsSnapshot.docs.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+          count++;
+          if (count >= 400) {
+            commitPromises.push(batch.commit());
+            count = 0;
+          }
+        });
+
+        if (count > 0) {
+          commitPromises.push(batch.commit());
+        }
+
+        await Promise.all(commitPromises);
+      }
+
+      // Also ensure any product items currently in state with an id are cleaned up
+      if (products.length > 0) {
+        await Promise.all(
+          products.map(async (p) => {
+            try {
+              await deleteDoc(doc(db, 'products', p.id));
+            } catch {
+              // Ignore already deleted
+            }
+          })
+        );
+      }
+
+      setShowDeleteAllConfirm(false);
+      alert('تم حذف جميع المنتجات بنجاح وبشكل نهائي من قاعدة البيانات وتحديث المتجر فوراً.\n\nلم يتم المساس بأي من الأقسام أو الطلبات.');
+    } catch (error) {
+      console.error('Error deleting all products:', error);
+      handleFirestoreError(error, OperationType.DELETE, 'products');
+      alert('حدث خطأ أثناء محاولة حذف جميع المنتجات من قاعدة البيانات السحابية.');
+    } finally {
+      setIsDeletingAll(false);
     }
   };
 
@@ -164,6 +263,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       if (currentCategory.id) {
         // Update
+        const updatedCat: Category = {
+          id: currentCategory.id,
+          name: currentCategory.name,
+          slug,
+        };
+        onCategorySaved?.(updatedCat);
         const catRef = doc(db, 'categories', currentCategory.id);
         await updateDoc(catRef, {
           name: currentCategory.name,
@@ -172,7 +277,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         alert('تم تحديث القسم بنجاح في قاعدة البيانات.');
       } else {
         // Create
-        await addDoc(collection(db, 'categories'), {
+        const newCatRef = doc(collection(db, 'categories'));
+        const newCat: Category = {
+          id: newCatRef.id,
+          name: currentCategory.name,
+          slug,
+        };
+        onCategorySaved?.(newCat);
+        await setDoc(newCatRef, {
           name: currentCategory.name,
           slug,
         });
@@ -188,6 +300,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleDeleteCategory = async (categoryId: string) => {
     if (confirm('هل أنت متأكد من حذف هذا القسم نهائياً من قاعدة البيانات؟')) {
+      onCategoryDeleted?.(categoryId);
       try {
         await deleteDoc(doc(db, 'categories', categoryId));
         alert('تم حذف القسم بنجاح من قاعدة البيانات.');
@@ -455,18 +568,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {activeTab === 'products' && (
             <div className="space-y-6">
               
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg text-stone-900 font-serif">إدارة منتجات المتجر</h3>
-                <button
-                  onClick={() => {
-                    setCurrentProduct({ category: categories[0]?.slug || 'skincare', stock: 20, price: 100 });
-                    setIsEditingProduct(true);
-                  }}
-                  className="bg-rose-900 hover:bg-rose-800 text-amber-50 px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>إضافة منتج جديد</span>
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-lg text-stone-900 font-serif">إدارة منتجات المتجر</h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    العدد الإجمالي: {products.length} منتج مسجل في قاعدة البيانات
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => setShowDeleteAllConfirm(true)}
+                    disabled={products.length === 0 || isDeletingAll}
+                    className="bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
+                    title="حذف جميع المنتجات دفعة واحدة نهائياً"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-600" />
+                    <span>حذف جميع المنتجات ({products.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setCurrentProduct({ category: categories[0]?.slug || 'skincare', stock: 20, price: 100 });
+                      setIsEditingProduct(true);
+                    }}
+                    className="bg-rose-900 hover:bg-rose-800 text-amber-50 px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>إضافة منتج جديد</span>
+                  </button>
+                </div>
               </div>
 
               {/* Products Table */}
@@ -483,44 +614,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {products.map((product) => {
-                        const catObj = categories.find(c => c.slug === product.category);
-                        return (
-                          <tr key={product.id} className="hover:bg-stone-50/50 transition-colors">
-                            <td className="p-4 flex items-center gap-3">
-                              <img src={product.image} alt={product.name} className="w-10 h-10 rounded-xl object-cover border border-stone-200" />
-                              <div>
-                                <p className="font-bold text-stone-900">{product.name}</p>
-                                <p className="text-[11px] text-stone-400 line-clamp-1">{product.description}</p>
-                              </div>
-                            </td>
-                            <td className="p-4 text-stone-600 font-medium">{catObj ? catObj.name : product.category}</td>
-                            <td className="p-4 font-bold text-rose-900">{product.price.toFixed(2)} ر.س</td>
-                            <td className="p-4 font-bold text-stone-800">{product.stock}</td>
-                            <td className="p-4 text-center">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => {
-                                    setCurrentProduct(product);
-                                    setIsEditingProduct(true);
-                                  }}
-                                  className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg transition-colors"
-                                  title="تعديل المنتج"
-                                >
-                                  <Edit3 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteProduct(product.id)}
-                                  className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors"
-                                  title="حذف المنتج"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {products.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-10 text-center text-stone-400">
+                            <div className="w-12 h-12 rounded-2xl bg-stone-100 text-stone-400 flex items-center justify-center mx-auto mb-3">
+                              <Package className="w-6 h-6" />
+                            </div>
+                            <p className="font-bold text-stone-700 text-sm">لا توجد منتجات حالياً في قاعدة البيانات</p>
+                            <p className="text-xs text-stone-400 mt-1">تم إفراغ جميع المنتجات، أو لم تقم بإضافة منتجات بعد. انقر على "إضافة منتج جديد" للبدء.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        products.map((product) => {
+                          const catObj = categories.find(c => c.slug === product.category);
+                          return (
+                            <tr key={product.id} className="hover:bg-stone-50/50 transition-colors">
+                              <td className="p-4 flex items-center gap-3">
+                                <img src={product.image} alt={product.name} className="w-10 h-10 rounded-xl object-cover border border-stone-200" />
+                                <div>
+                                  <p className="font-bold text-stone-900">{product.name}</p>
+                                  <p className="text-[11px] text-stone-400 line-clamp-1">{product.description}</p>
+                                </div>
+                              </td>
+                              <td className="p-4 text-stone-600 font-medium">{catObj ? catObj.name : product.category}</td>
+                              <td className="p-4 font-bold text-rose-900">{product.price.toFixed(2)} ر.س</td>
+                              <td className="p-4 font-bold text-stone-800">{product.stock}</td>
+                              <td className="p-4 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setCurrentProduct(product);
+                                      setIsEditingProduct(true);
+                                    }}
+                                    className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg transition-colors"
+                                    title="تعديل المنتج"
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(product.id)}
+                                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors"
+                                    title="حذف المنتج"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -818,6 +961,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Products Confirmation Modal */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 z-60 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-rose-200 text-right animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto mb-4 border border-rose-200">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+
+            <h3 className="text-xl font-black text-stone-900 text-center font-serif mb-2">
+              تأكيد حذف جميع المنتجات
+            </h3>
+
+            <p className="text-xs text-stone-600 text-center leading-relaxed mb-4">
+              هل أنت متأكد من رغبتك في حذف <span className="font-bold text-rose-700">جميع المنتجات ({products.length} منتج)</span> دفعة واحدة ونهائياً من قاعدة البيانات السحابية والمتجر؟
+            </p>
+
+            <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 mb-6 text-xs text-amber-900 space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>ضمان أمان البيانات:</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-normal">
+                لن يتم حذف أو التأثير على أي قسم من الأقسام، وستبقى جميع الطلبات السابقة والحالية وبيانات العملاء محفوظة بأمان تام في قاعدة البيانات.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleDeleteAllProducts}
+                disabled={isDeletingAll}
+                className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white py-3 rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isDeletingAll ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>جاري الحذف النهائي...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>نعم، حذف الكل نهائياً</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => !isDeletingAll && setShowDeleteAllConfirm(false)}
+                disabled={isDeletingAll}
+                className="px-5 bg-stone-100 hover:bg-stone-200 disabled:opacity-50 text-stone-700 py-3 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                إلغاء الأمر
+              </button>
+            </div>
           </div>
         </div>
       )}

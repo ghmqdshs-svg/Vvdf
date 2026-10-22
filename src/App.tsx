@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, Order, CartItem, Category } from './types';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, onSnapshot, addDoc, doc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, setDoc, doc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -32,8 +32,21 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('laver_products');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      if (typeof window !== 'undefined') {
+        if (localStorage.getItem('laver_products_wiped_v2') !== 'true') {
+          localStorage.removeItem('laver_products');
+          localStorage.removeItem('botanique_products');
+          localStorage.setItem('laver_products_wiped_v2', 'true');
+          return [];
+        }
+        const saved = localStorage.getItem('laver_products');
+        return saved ? JSON.parse(saved) : [];
+      }
+    } catch {
+      return [];
+    }
+    return [];
   });
   const [categories, setCategories] = useState<Category[]>(() => {
     const saved = localStorage.getItem('laver_categories');
@@ -72,6 +85,7 @@ export default function App() {
     let unsubProducts: (() => void) | undefined;
     let unsubCategories: (() => void) | undefined;
     let unsubOrders: (() => void) | undefined;
+    let hasAttemptedSeed = false;
 
     try {
       unsubProducts = onSnapshot(
@@ -81,7 +95,7 @@ export default function App() {
           snapshot.forEach((docSnap) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as Product);
           });
-          if (list.length > 0) setProducts(list);
+          setProducts(list);
         },
         (error) => {
           if (error.message.includes('Quota') || error.message.includes('quota')) {
@@ -93,12 +107,29 @@ export default function App() {
 
       unsubCategories = onSnapshot(
         collection(db, 'categories'),
-        (snapshot) => {
+        async (snapshot) => {
           const list: Category[] = [];
           snapshot.forEach((docSnap) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as Category);
           });
-          if (list.length > 0) setCategories(list);
+
+          // Seed default categories into Firestore if empty on first initialize
+          if (list.length === 0 && !localStorage.getItem('laver_categories_initialized') && !hasAttemptedSeed) {
+            hasAttemptedSeed = true;
+            try {
+              for (const cat of DEFAULT_CATEGORIES) {
+                const ref = doc(collection(db, 'categories'));
+                await setDoc(ref, { name: cat.name, slug: cat.slug });
+              }
+              localStorage.setItem('laver_categories_initialized', 'true');
+            } catch (e) {
+              console.warn('Seeding categories to Firestore failed:', e);
+              setCategories(DEFAULT_CATEGORIES);
+            }
+          } else {
+            localStorage.setItem('laver_categories_initialized', 'true');
+            setCategories(list);
+          }
         },
         (error) => {
           if (error.message.includes('Quota') || error.message.includes('quota')) {
@@ -115,9 +146,7 @@ export default function App() {
           snapshot.forEach((docSnap) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as Order);
           });
-          if (list.length > 0) {
-            setOrders(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-          }
+          setOrders(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
         },
         (error) => {
           if (error.message.includes('Quota') || error.message.includes('quota')) {
@@ -136,6 +165,56 @@ export default function App() {
       if (unsubOrders) unsubOrders();
     };
   }, []);
+
+  // Instant optimistic handlers for Admin actions
+  const handleProductSaved = (product: Product) => {
+    setProducts((prev) => {
+      const idx = prev.findIndex((p) => p.id === product.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = product;
+        return copy;
+      }
+      return [product, ...prev];
+    });
+  };
+
+  const handleProductDeleted = (productId: string) => {
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+  };
+
+  const handleClearAllProducts = () => {
+    setProducts([]);
+    try {
+      localStorage.setItem('laver_products', '[]');
+      localStorage.setItem('botanique_products', '[]');
+      localStorage.setItem('laver_products_wiped_v2', 'true');
+    } catch (e) {
+      console.warn('Failed to clear local product cache', e);
+    }
+  };
+
+  const handleCategorySaved = (category: Category) => {
+    setCategories((prev) => {
+      const idx = prev.findIndex((c) => c.id === category.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = category;
+        return copy;
+      }
+      return [...prev, category];
+    });
+  };
+
+  const handleCategoryDeleted = (categoryId: string) => {
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+  };
+
+  const handleOrderStatusUpdated = (orderId: string, newStatus: any) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date().toISOString() } : o))
+    );
+  };
 
   // Cart actions
   const handleAddToCart = (product: Product, quantity = 1) => {
@@ -168,7 +247,7 @@ export default function App() {
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
-  // Submit Order with Firestore & local fallback
+  // Submit Order with Firestore & local fallback (0 SAR free shipping by default)
   const handleSubmitOrder = async (orderDetails: {
     customerName: string;
     phone: string;
@@ -179,7 +258,7 @@ export default function App() {
     const randomNum = Math.floor(10000 + Math.random() * 90000);
     const orderNumber = `LVR-${randomNum}`;
     const totalAmount = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-    const shippingFee = totalAmount >= 299 ? 0 : 25;
+    const shippingFee = 0; // Standard shipping is 0 SAR (Free)
 
     const newOrderData = {
       orderNumber,
@@ -201,7 +280,14 @@ export default function App() {
     };
 
     try {
-      await addDoc(collection(db, 'orders'), newOrderData);
+      const orderRef = doc(collection(db, 'orders'));
+      const fullOrder: Order = {
+        id: orderRef.id,
+        ...newOrderData,
+      };
+      // Optimistically add to orders list instantly
+      setOrders((prev) => [fullOrder, ...prev]);
+      await setDoc(orderRef, newOrderData);
     } catch (err) {
       // Fallback local order
       const localOrder: Order = {
@@ -252,6 +338,7 @@ export default function App() {
         setIsAdminOpen={() => setIsAdminLoginOpen(true)}
         isAdminLoggedIn={isAdminLoggedIn}
         setIsAdminDashboardOpen={setIsAdminDashboardOpen}
+        newOrdersCount={orders.filter(o => o.status === 'new').length}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
       />
@@ -471,6 +558,12 @@ export default function App() {
         products={products}
         categories={categories}
         orders={orders}
+        onProductSaved={handleProductSaved}
+        onProductDeleted={handleProductDeleted}
+        onClearAllProducts={handleClearAllProducts}
+        onCategorySaved={handleCategorySaved}
+        onCategoryDeleted={handleCategoryDeleted}
+        onOrderStatusUpdated={handleOrderStatusUpdated}
       />
 
     </div>

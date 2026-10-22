@@ -32,7 +32,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   if (!isOpen) return null;
 
   const totalAmount = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const shippingFee = totalAmount >= 299 ? 0 : 25;
+  const shippingFee = 0;
   const finalTotal = totalAmount + shippingFee;
 
   const handleSubmit = async (e: React.FormEvent) => {

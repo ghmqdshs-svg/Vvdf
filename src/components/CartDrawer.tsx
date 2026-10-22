@@ -22,7 +22,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   if (!isOpen) return null;
 
   const totalAmount = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const shippingFee = totalAmount >= 299 || totalAmount === 0 ? 0 : 25;
+  const shippingFee = 0;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-stone-900/60 backdrop-blur-xs">
@@ -114,7 +114,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <div className="flex justify-between text-stone-600">
                   <span>رسوم الشحن:</span>
                   <span className="font-bold text-stone-900">
-                    {shippingFee === 0 ? <span className="text-emerald-600 font-bold">مجاني</span> : `${shippingFee.toFixed(2)} ر.س`}
+                    <span className="text-emerald-600 font-bold">مجاني (0.00 ر.س)</span>
                   </span>
                 </div>
                 <div className="pt-2 border-t border-stone-200 flex justify-between text-sm font-black text-stone-900">

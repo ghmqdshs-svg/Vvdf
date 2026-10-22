@@ -9,6 +9,7 @@ interface NavbarProps {
   setIsAdminOpen: (open: boolean) => void;
   isAdminLoggedIn: boolean;
   setIsAdminDashboardOpen: (open: boolean) => void;
+  newOrdersCount?: number;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
 }
@@ -21,6 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setIsAdminOpen,
   isAdminLoggedIn,
   setIsAdminDashboardOpen,
+  newOrdersCount = 0,
   searchQuery,
   setSearchQuery,
 }) => {
@@ -123,11 +125,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             {isAdminLoggedIn ? (
               <button
                 onClick={() => setIsAdminDashboardOpen(true)}
-                className="bg-stone-900 hover:bg-stone-800 text-amber-200 px-3.5 py-2 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                className="relative bg-stone-900 hover:bg-stone-800 text-amber-200 px-3.5 py-2 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
                 title="لوحة تحكم الإدارة"
               >
                 <UserCheck className="w-4 h-4 text-amber-300" />
                 <span className="hidden sm:inline">لوحة الإدارة</span>
+                {newOrdersCount > 0 && (
+                  <span className="bg-rose-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full shadow-md animate-pulse">
+                    {newOrdersCount} جديد
+                  </span>
+                )}
               </button>
             ) : (
               <button

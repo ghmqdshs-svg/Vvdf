@@ -6,14 +6,16 @@ interface ProductCardProps {
   product: Product;
   onAddToCart: (product: Product) => void;
   onViewDetails: (product: Product) => void;
+  categoryMap?: Record<string, string>;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onAddToCart,
   onViewDetails,
+  categoryMap = {},
 }) => {
-  const categoryNames: Record<string, string> = {
+  const defaultCategoryNames: Record<string, string> = {
     'mens-care': 'عناية الرجال',
     'womens-care': 'عناية النساء',
     skincare: 'عناية بالبشرة',
@@ -22,6 +24,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     perfumes: 'عطور ومستحضرات',
     sets: 'مجموعات هدايا',
   };
+  const categoryNames = { ...defaultCategoryNames, ...categoryMap };
 
   return (
     <div className="bg-white rounded-2xl shadow-xs hover:shadow-xl transition-all duration-300 border border-stone-200/80 overflow-hidden flex flex-col group">

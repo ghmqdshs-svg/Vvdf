@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Order } from '../types';
 import { Search, Package, Clock, Truck, CheckCircle2, XCircle, AlertCircle, Phone, Hash } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, doc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 
 export const OrderTracking: React.FC = () => {
@@ -11,9 +11,25 @@ export const OrderTracking: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
+  useEffect(() => {
+    if (!searchedOrder?.id) return;
+    // Real-time listener for the tracked order so when admin updates status, customer sees it live!
+    const unsub = onSnapshot(doc(db, 'orders', searchedOrder.id), (docSnap) => {
+      if (docSnap.exists()) {
+        setSearchedOrder({ id: docSnap.id, ...docSnap.data() } as Order);
+      }
+    }, (err) => {
+      console.warn("Track order snapshot error:", err);
+    });
+    return () => unsub();
+  }, [searchedOrder?.id]);
+
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!orderNumberInput.trim() || !phoneInput.trim()) {
+    const cleanOrderNum = orderNumberInput.trim().toUpperCase();
+    const cleanPhone = phoneInput.trim();
+
+    if (!cleanOrderNum || !cleanPhone) {
       alert('يرجى إدخال رقم الطلب ورقم الجوال');
       return;
     }
@@ -22,31 +38,49 @@ export const OrderTracking: React.FC = () => {
     setNotFound(false);
     setSearchedOrder(null);
 
+    let found: Order | null = null;
+
     try {
       const q = query(
         collection(db, 'orders'),
-        where('orderNumber', '==', orderNumberInput.trim().toUpperCase())
+        where('orderNumber', '==', cleanOrderNum)
       );
       const snapshot = await getDocs(q);
       
-      let found: Order | null = null;
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as Order;
-        if (data.phone.trim() === phoneInput.trim()) {
+        if (data.phone.trim() === cleanPhone) {
           found = { ...data, id: docSnap.id };
         }
       });
-
-      if (found) {
-        setSearchedOrder(found);
-      } else {
-        setNotFound(true);
-      }
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'orders');
-    } finally {
-      setIsLoading(false);
     }
+
+    // Fallback to local storage if Firestore had network issue or order is local
+    if (!found) {
+      try {
+        const savedOrders = localStorage.getItem('laver_orders');
+        if (savedOrders) {
+          const parsed: Order[] = JSON.parse(savedOrders);
+          const localMatch = parsed.find(
+            (o) => o.orderNumber.toUpperCase() === cleanOrderNum && o.phone.trim() === cleanPhone
+          );
+          if (localMatch) {
+            found = localMatch;
+          }
+        }
+      } catch (err) {
+        console.error("Local order search error:", err);
+      }
+    }
+
+    if (found) {
+      setSearchedOrder(found);
+    } else {
+      setNotFound(true);
+    }
+    setIsLoading(false);
   };
 
   const statusInfo: Record<string, { label: string; color: string; icon: any; step: number }> = {

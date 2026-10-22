@@ -1,23 +1,27 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { getFirestore } from 'firebase/firestore';
+import localConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+// Netlify environment variable support with seamless fallback to local configuration
+const firebaseConfig = {
+  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || localConfig.apiKey,
+  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || localConfig.authDomain,
+  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || localConfig.projectId,
+  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || localConfig.storageBucket,
+  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || localConfig.messagingSenderId,
+  appId: import.meta.env?.VITE_FIREBASE_APP_ID || localConfig.appId,
+  firestoreDatabaseId:
+    import.meta.env?.VITE_FIREBASE_FIRESTORE_DATABASE_ID ||
+    localConfig.firestoreDatabaseId ||
+    '(default)',
+};
+
+// Safe singleton app initialization
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
-
-// Test connection
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Firebase client is offline or configuration needs check.");
-    }
-  }
-}
-testConnection();
+export { firebaseConfig };
 
 export enum OperationType {
   CREATE = 'create',
@@ -42,10 +46,6 @@ export interface FirestoreErrorInfo {
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errMessage = error instanceof Error ? error.message : String(error);
-  if (errMessage.includes('Quota exceeded') || errMessage.includes('quota')) {
-    console.warn('Firestore Quota Exceeded. Operating in cached/fallback mode.');
-    return;
-  }
   const errInfo: FirestoreErrorInfo = {
     error: errMessage,
     authInfo: {
@@ -57,6 +57,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation Notice: ', errMessage);
+  return errInfo;
 }

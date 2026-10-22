@@ -4,12 +4,14 @@ import { X, ShoppingBag, Sparkles, CheckCircle2, ShieldCheck } from 'lucide-reac
 
 interface ProductModalProps {
   product: Product | null;
+  categoryName?: string;
   onClose: () => void;
   onAddToCart: (product: Product, quantity: number) => void;
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({
   product,
+  categoryName,
   onClose,
   onAddToCart,
 }) => {
@@ -42,7 +44,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         <div className="md:w-1/2 p-6 md:p-8 flex flex-col justify-between text-right">
           <div className="space-y-4">
             <span className="inline-block bg-rose-100 text-rose-800 text-xs font-bold px-3 py-1 rounded-full">
-              {product.category}
+              {categoryName || product.category}
             </span>
 
             <h2 className="text-2xl font-black text-stone-900 font-serif">{product.name}</h2>
